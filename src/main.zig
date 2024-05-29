@@ -15,6 +15,8 @@ const TARGET_FPS: f32 = 480.0;
 const TARGET_DT: f32 = 1.0 / TARGET_FPS;
 const GRAVITY = 1000.0;
 const COLLISION_DAMPING = 0.8;
+const WINDOW_FORCE_FACTOR = 1.1;
+const WINDOW_VELOCITY_FACTOR = 0.5;
 
 const Vector2s = struct {
     items: []rl.Vector2,
@@ -54,7 +56,7 @@ pub fn main() anyerror!void {
         rl.clearBackground(rl.Color.dark_gray);
 
         const winpos = rl.getWindowPosition();
-        const dwinpos = rm.vector2Subtract(winpos, prev_winpos);
+        const dwinpos = rm.vector2Scale(rm.vector2Subtract(winpos, prev_winpos), WINDOW_FORCE_FACTOR);
         const w = rl.getScreenWidth();
         const h = rl.getScreenHeight();
         const real_dt = rl.getFrameTime();
@@ -62,7 +64,7 @@ pub fn main() anyerror!void {
 
         if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
             try positions.append(rl.getMousePosition());
-            try velocities.append(.{ .x = 500, .y = 500 });
+            try velocities.append(.{ .x = @floatFromInt(rl.getRandomValue(-500, 500)), .y = @floatFromInt(rl.getRandomValue(-500, 500)) });
             try colors.append(rl.colorFromHSV(@floatFromInt(rl.getRandomValue(0, 360)), 0.5, 0.8));
         }
 
@@ -73,6 +75,12 @@ pub fn main() anyerror!void {
 
                 pos.* = rm.vector2Subtract(pos.*, rm.vector2Scale(dwinpos, TARGET_DT / real_dt));
                 velocities.items[i].y += GRAVITY * TARGET_DT;
+
+                // Check if the circle is hit by the movement of the window
+                if (rm.vector2Length(dwinpos) != 0) {
+                    const window_velocity = rm.vector2Scale(dwinpos, WINDOW_VELOCITY_FACTOR);
+                    velocities.items[i] = rm.vector2Add(velocities.items[i], window_velocity);
+                }
 
                 const nx = pos.x + velocities.items[i].x * TARGET_DT;
                 if (nx - radius <= 0) {
@@ -96,12 +104,29 @@ pub fn main() anyerror!void {
                     pos.y = ny;
                 }
 
+                // a really bad collision detection. not real physics. just for fun yolo
+                for (positions.items, 0..) |*other_pos, j| {
+                    if (i != j) {
+                        const delta = rm.vector2Distance(pos.*, other_pos.*);
+                        if (delta < 2 * radius) {
+                            const correction = rm.vector2Scale(rm.vector2Normalize(rm.vector2Subtract(pos.*, other_pos.*)), radius - 0.5 * delta);
+                            pos.* = rm.vector2Add(pos.*, correction);
+                            other_pos.* = rm.vector2Subtract(other_pos.*, correction);
+                            const rel_velocity = rm.vector2Subtract(velocities.items[i], velocities.items[j]);
+                            const dot_product = rm.vector2DotProduct(rm.vector2Subtract(pos.*, other_pos.*), rel_velocity);
+                            if (dot_product < 0) {
+                                // ad hoc clamp
+                                const impulse = rm.vector2Scale(rm.vector2Subtract(pos.*, other_pos.*), rm.clamp(-COLLISION_DAMPING * dot_product, 0.5, 1.0));
+                                velocities.items[i] = rm.vector2Subtract(velocities.items[i], impulse);
+                                velocities.items[j] = rm.vector2Add(velocities.items[j], impulse);
+                            }
+                        }
+                    }
+                }
                 rl.drawRing(pos.*, radius * 0.8, radius, 0, 360, 100, rl.colorAlpha(colors.items[i], f));
             }
         }
-
-        rl.drawText(rl.textFormat("%f %f", .{ dwinpos.x, dwinpos.y }), 0, 0, 32, rl.Color.ray_white);
-
+        rl.drawText(rl.textFormat("%d %f %f", .{ rl.getFPS(), dwinpos.x, dwinpos.y }), 0, 0, 32, rl.Color.ray_white);
         prev_winpos = winpos;
     }
 }
