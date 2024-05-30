@@ -31,8 +31,8 @@ const Colors = struct {
 };
 
 pub fn main() anyerror!void {
-    const screenWidth = 800;
-    const screenHeight = 420;
+    const screenWidth = 1000;
+    const screenHeight = 1000;
 
     rl.initWindow(screenWidth, screenHeight, "SubFrames");
     defer rl.closeWindow();
@@ -55,18 +55,24 @@ pub fn main() anyerror!void {
         defer rl.endDrawing();
         rl.clearBackground(rl.Color.dark_gray);
 
+        if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
+            try positions.append(rl.getMousePosition());
+            try velocities.append(.{ .x = @floatFromInt(rl.getRandomValue(-500, 500)), .y = @floatFromInt(rl.getRandomValue(-500, 500)) });
+            try colors.append(rl.colorFromHSV(@floatFromInt(rl.getRandomValue(0, 360)), 0.5, 0.8));
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
+            positions.clearAndFree();
+            velocities.clearAndFree();
+            colors.clearAndFree();
+        }
+
         const winpos = rl.getWindowPosition();
         const dwinpos = rm.vector2Scale(rm.vector2Subtract(winpos, prev_winpos), WINDOW_FORCE_FACTOR);
         const w = rl.getScreenWidth();
         const h = rl.getScreenHeight();
         const real_dt = rl.getFrameTime();
         const radius: f32 = 20.0;
-
-        if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
-            try positions.append(rl.getMousePosition());
-            try velocities.append(.{ .x = @floatFromInt(rl.getRandomValue(-500, 500)), .y = @floatFromInt(rl.getRandomValue(-500, 500)) });
-            try colors.append(rl.colorFromHSV(@floatFromInt(rl.getRandomValue(0, 360)), 0.5, 0.8));
-        }
 
         var t: f32 = 0.0;
         while (t < real_dt) : (t += TARGET_DT) {
@@ -116,7 +122,7 @@ pub fn main() anyerror!void {
                             const dot_product = rm.vector2DotProduct(rm.vector2Subtract(pos.*, other_pos.*), rel_velocity);
                             if (dot_product < 0) {
                                 // ad hoc clamp
-                                const impulse = rm.vector2Scale(rm.vector2Subtract(pos.*, other_pos.*), rm.clamp(-COLLISION_DAMPING * dot_product, 0.5, 1.0));
+                                const impulse = rm.vector2Scale(rm.vector2Subtract(pos.*, other_pos.*), rm.clamp(-COLLISION_DAMPING * dot_product, -1.0, 1.0));
                                 velocities.items[i] = rm.vector2Subtract(velocities.items[i], impulse);
                                 velocities.items[j] = rm.vector2Add(velocities.items[j], impulse);
                             }
